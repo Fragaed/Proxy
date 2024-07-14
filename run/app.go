@@ -28,7 +28,8 @@ func NewApp(log *zap.SugaredLogger, db *sqlx.DB, cfg *config.Config) *App {
 	}
 	gRPCServer := grpc.NewServer()
 	Storage := storage.NewStorage(db)
-	Service := service.NewService(Storage)
+	api := storage.NewApi()
+	Service := service.NewService(Storage, api)
 
 	controller.Register(gRPCServer, Service)
 	controller.NewServerAPI(Service)

@@ -2,29 +2,36 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"proxy/internal/models"
 )
 
 type Service struct {
 	storage Storager
+	API     API
 }
 
+//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --name=Storager
 type Storager interface {
 	Add(response models.Response) error
 	Healthcheck() error
 }
 
-func NewService(storage Storager) *Service {
+//go:generate go run github.com/vektra/mockery/v2@v2.35.4 --name=API
+type API interface {
+	DoReq() (*models.Response, error)
+	CheckAPI() error
+}
+
+func NewService(storage Storager, api API) *Service {
 	return &Service{
 		storage: storage,
+		API:     api,
 	}
 }
 
 func (s *Service) Get(ctx context.Context) (*models.Response, error) {
-	resp, err := doReq()
+	resp, err := s.API.DoReq()
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +48,7 @@ func (s *Service) Health(ctx context.Context) (*models.Health, error) {
 	if err := s.storage.Healthcheck(); err != nil {
 		return nil, fmt.Errorf("healthcheck error: %w", err)
 	}
-	if err := chekAPI(); err != nil {
+	if err := s.API.CheckAPI(); err != nil {
 		return nil, fmt.Errorf("healthcheck error: %w", err)
 	}
 	resp.DBStatus = "Postgres ready"
@@ -49,51 +56,4 @@ func (s *Service) Health(ctx context.Context) (*models.Health, error) {
 	resp.APIStatus = "API ready"
 
 	return &resp, nil
-}
-
-func doReq() (*models.Response, error) {
-	var resp models.Response
-	url := "https://garantex.org/api/v2/depth?market=usdtrub"
-	method := "GET"
-
-	client := &http.Client{}
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("new request: %w", err)
-	}
-	req.Header.Add("Cookie", "__ddg1_=SddCSyqTtTuXc6PZS6ka")
-
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-	defer res.Body.Close()
-
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("decode response body: %w", err)
-	}
-	return &resp, nil
-}
-
-func chekAPI() error {
-	url := "https://garantex.org/api/v2/depth?market=usdtrub"
-	client := &http.Client{}
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Add("Cookie", "__ddg1_=SddCSyqTtTuXc6PZS6ka")
-
-	res, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("making request: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned non-200 status: %d", res.StatusCode)
-	}
-
-	return nil
 }
