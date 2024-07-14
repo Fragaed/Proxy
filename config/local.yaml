@@ -1,6 +1,5 @@
 local:
   port: 50051
-
 db:
   host: "db"
   port: "5432"
