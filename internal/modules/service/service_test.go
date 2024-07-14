@@ -13,10 +13,6 @@ import (
 func TestService_Get(t *testing.T) {
 	asks := models.Asks{Price: "89.35"}
 	bids := models.Bids{Price: "89.34"}
-	type fields struct {
-		storage Storager
-		API     API
-	}
 	type args struct {
 		ctx context.Context
 	}

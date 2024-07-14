@@ -31,7 +31,7 @@ func NewPostgresDB(cfg *config.Config) (*sqlx.DB, error) {
 		case <-ticker.C:
 			dbRaw, err = sql.Open(cfg.DB.Driver, dsn)
 			if err != nil {
-				return nil, fmt.Errorf("failed to connect to db", err)
+				return nil, fmt.Errorf("failed to connect to db %w", err)
 			}
 			err = dbRaw.Ping()
 			if err == nil {
