@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Local Local    `yaml:"local"`
 	DB    DBConfig `yaml:"db"`
+	Log   Log      `yaml:"log"`
 }
 
 type Local struct {
@@ -26,6 +27,10 @@ type DBConfig struct {
 	SSlMode  string        `yaml:"sslmode"`
 	Driver   string        `yaml:"driver"`
 	TimeOut  time.Duration `yaml:"timeout"`
+}
+
+type Log struct {
+	Project string `yaml:"project"`
 }
 
 func MustLoad() *Config {

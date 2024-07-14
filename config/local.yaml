@@ -9,3 +9,5 @@ db:
   sslmode: "disable"
   driver: "postgres"
   timeout: 60s
+log:
+  project: "proxy"

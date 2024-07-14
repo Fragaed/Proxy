@@ -7,7 +7,7 @@ test:
 	go test ./...
 
 docker-build:
-	docker-compose up -d
+	docker-compose up
 
 run:
 	docker-compose run --rm app ./app

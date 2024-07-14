@@ -1,16 +1,26 @@
 package main
 
 import (
-	"flag"
+	"context"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"proxy/config"
 	"proxy/internal/infrastructure/db/postgres"
 	"proxy/run"
 	"syscall"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 func init() {
@@ -22,42 +32,32 @@ func init() {
 
 func main() {
 	logger := setupLogger()
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			logger.Info("Failed to sync logger", zap.Error(err))
-		}
-	}()
+	defer logger.Sync()
 
-	// Загружаем конфигурацию по умолчанию
 	cfg := config.MustLoad()
-	logger.Infow("Конфигурация загружена по умолчанию")
+	logger.Infow("Конфигурация загружена")
 
-	// Определение флагов для переопределения конфигурации базы данных
-	dbHost := flag.String("db-host", cfg.DB.Host, "Хост базы данных")
-	dbPort := flag.String("db-port", cfg.DB.Port, "Порт базы данных")
-	dbUser := flag.String("db-user", cfg.DB.Username, "Пользователь базы данных")
-	dbPassword := flag.String("db-password", cfg.DB.Password, "Пароль базы данных")
-	dbName := flag.String("db-name", cfg.DB.DBName, "Имя базы данных")
-
-	// Разбор флагов
-	flag.Parse()
-
-	// Переопределение конфигурации базы данных, если флаги были заданы
-	cfg.DB.Host = *dbHost
-	cfg.DB.Port = *dbPort
-	cfg.DB.Username = *dbUser
-	cfg.DB.Password = *dbPassword
-	cfg.DB.DBName = *dbName
-
-	logger.Infow("Конфигурация базы данных загружена", "host", cfg.DB.Host, "port", cfg.DB.Port, "user", cfg.DB.Username, "db", cfg.DB.DBName)
-
-	// Инициализация подключения к базе данных
 	db, err := postgres.NewPostgresDB(cfg)
 	if err != nil {
 		logger.Fatalw("Не удалось подключиться к базе данных", "err", err)
 	}
 
 	application := run.NewApp(logger, db, cfg)
+
+	tp := initTracer()
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+	otel.SetTracerProvider(tp)
+
+	// Инициализация реестра метрик
+	registry := prometheus.NewRegistry()
+	registerer := prometheus.WrapRegistererWith(prometheus.Labels{"go_project": cfg.Log.Project}, registry)
+	registerer.MustRegister(
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+	)
+
+	// Обработка метрик
+	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
 	go application.MustRun()
 
@@ -91,4 +91,20 @@ func setupLogger() *zap.SugaredLogger {
 	}
 
 	return logger.Sugar()
+}
+
+func initTracer() *trace.TracerProvider {
+	exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		log.Fatalf("не удалось создать экспортер: %v", err)
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(exp),
+		trace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("proxy-service"),
+		)),
+	)
+	return tp
 }
