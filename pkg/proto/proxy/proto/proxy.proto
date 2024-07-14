@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package proxy;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "frgaed.proxy.v1";
+
+service Proxy {
+  rpc GetRates (google.protobuf.Empty) returns (GetRatesResponse);
+  rpc Healthcheck(google.protobuf.Empty) returns(HealthcheckResponse);
+
+}
+
+  message GetRatesResponse {
+    string time_stamp = 1;
+    string ask_price =2;
+    string bid_price = 3;
+  }
+
+  message HealthcheckResponse {
+  string app_status =1;
+  string postgers_status =2;
+  string api_status = 3;
+  }
+
+
+
